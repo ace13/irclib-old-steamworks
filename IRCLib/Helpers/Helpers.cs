@@ -143,4 +143,60 @@ namespace IRCLib.Helpers
         	return commandList.Find(item => item.Attributes.Name == commandName) != default(IRCCommandLink);
         }
     }
+	
+    /// <summary>
+    /// A simplified class for handling content
+    /// </summary>
+    public class ContentHandler
+    {
+        /// <summary>
+        /// Load a class from a XML document
+        /// </summary>
+        /// <typeparam name="T">The type of class to load</typeparam>
+        /// <param name="file">The file to load from</param>
+        /// <returns>The class that was contained in the file</returns>
+        public static T Load<T>(string file)
+        {
+            XmlSerializer xS = new XmlSerializer(typeof(T));
+            XmlReader r = XmlReader.Create(file);
+            T ret = (T)xS.Deserialize(r);
+            r.Close();
+            return ret;
+        }
+
+        /// <summary>
+        /// Save a class to a XML document
+        /// </summary>
+        /// <typeparam name="T">The type of class to save</typeparam>
+        /// <param name="save">The class to save</param>
+        /// <param name="file">The file to save to</param>
+        public static void Save<T>(T save, string file)
+        {
+            XmlSerializer xS = new XmlSerializer(typeof(T));
+            XmlWriter w;
+            w = XmlWriter.Create(file);
+
+            xS.Serialize(w, save);
+            w.Flush();
+            w.Close();
+        }
+
+        /// <summary>
+        /// Save a class to a XML document
+        /// </summary>
+        /// <typeparam name="T">The type of class to save</typeparam>
+        /// <param name="save">The class to save</param>
+        /// <param name="file">The file to save to</param>
+        /// <param name="sets">The XmlWriterSettings to use when saving</param>
+        public static void Save<T>(T save, string file, XmlWriterSettings sets)
+        {
+            XmlSerializer xS = new XmlSerializer(typeof(T));
+            XmlWriter w;
+            w = XmlWriter.Create(file, sets);
+
+            xS.Serialize(w, save);
+            w.Flush();
+            w.Close();
+        }
+    }
 }
