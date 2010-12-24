@@ -35,11 +35,11 @@ namespace IRCLib.Helpers
     /// </summary>
     public class IRCCommandList
     {
-        private SortedList<string, IRCCommandLink> commandList;
+        private List<IRCCommandLink> commandList;
 
         public IRCCommandList()
         {
-            commandList = new SortedList<string, IRCCommandLink>();
+            commandList = new List<IRCCommandLink>();
         }
 
         /// <summary>
@@ -50,9 +50,10 @@ namespace IRCLib.Helpers
         /// <param name="method">The command</param>
         public void AddCommand(IRCCommand commandName, object target, System.Reflection.MethodInfo method)
         {
-            if (!HasCommand(commandName.Name))
-                commandList.Add(commandName.Name, new IRCCommandLink() { Object = target, Method = method, Attributes = commandName });
-        }
+			IRCCommandLink val = new IRCCommandLink() { Object = target, Method = method, Attributes = commandName };
+            if (!commandList.Contains(val))
+                commandList.Add(val);
+		}
 
         /// <summary>
         /// Call the command specified in the message
@@ -60,17 +61,23 @@ namespace IRCLib.Helpers
         /// <param name="message">The message to call</param>
         public void CallCommand(IMessage message)
         {
-            if (message.IsCommand && ValidCommand(message.Command, message.Params.Length))
+        	if (message.IsCommand && ValidCommand(message.Command, message.Params.Length))
             {
-                IRCCommandLink command = commandList[message.Command];
+        		IRCCommandLink[] commands = ValidCommands(message.Command, message.Params.Length);
 
                 //Console.WriteLine("Invoking command \"{0}\" to \"{1}.{2}\"", message.MessageString, command.Object.GetType().Name, command.Method.Name);
 
                 if (Server.Verbose)
-                    Console.WriteLine("{0}: {1}", message.Owner.NickName, message.ShortMessageString);
+        			Console.WriteLine("{0}: {1}", message.Owner.NickName, message.ShortMessageString);
 
-
-                command.Method.Invoke(command.Object, new object[] { message });
+				for (int i = commands.Length - 1; i >= 0; i--)
+				{
+        			object ret = commands[i].Method.Invoke(commands.Last().Object, new object[] { message });
+     
+					if (ret != null)
+        				if (ret.GetType().Equals(typeof(bool)) && (bool)ret == true)
+        					break;
+				}
             }
             else
                 Console.WriteLine("Invalid call to {0}", message.Command);
@@ -84,10 +91,46 @@ namespace IRCLib.Helpers
         /// <returns>If the command allows the specified number of parameters</returns>
         public bool ValidCommand(string commandName, int numArgs)
         {
-            if (HasCommand(commandName))
-                return ((commandList[commandName].Attributes.MinimumArguments <= numArgs && commandList[commandName].Attributes.MaximumArguments >= numArgs) || (commandList[commandName].Attributes.MinimumArguments == -1 || (commandList[commandName].Attributes.MaximumArguments == -1 && commandList[commandName].Attributes.MinimumArguments >= numArgs)));
-
+        	if (HasCommand(commandName))
+			{
+        		IRCCommandLink[] commands = commandList.FindAll(item => item.Attributes.Name == commandName).ToArray();
+    
+				foreach (IRCCommandLink command in commands)
+				{
+        			if (command.Attributes.MinimumArguments == -1)
+        				return true;
+					else if (command.Attributes.MinimumArguments <= numArgs)
+					{
+        				if (command.Attributes.MaximumArguments >= numArgs)
+        					return true;
+        			}
+        		}
+        	}
+   
             return false;
+        }
+		
+		IRCCommandLink[] ValidCommands(string commandName, int numArgs)
+		{
+			List<IRCCommandLink> ret = new List<IRCCommandLink>();
+			
+        	if (HasCommand(commandName))
+			{
+				IRCCommandLink[] commands = commandList.FindAll(item => item.Attributes.Name == commandName).ToArray();
+				
+				foreach (IRCCommandLink command in commands)
+				{
+					if (command.Attributes.MinimumArguments == -1)
+						ret.Add(command);
+					else if (command.Attributes.MinimumArguments <= numArgs)
+					{
+						if (command.Attributes.MaximumArguments >= numArgs)
+							ret.Add(command);
+					}
+				}
+			}
+			
+            return ret.ToArray();
         }
 
         /// <summary>
@@ -97,63 +140,7 @@ namespace IRCLib.Helpers
         /// <returns>If the command has been registered in the list</returns>
         public bool HasCommand(string commandName)
         {
-            return commandList.ContainsKey(commandName);
-        }
-    }
-
-    /// <summary>
-    /// A simplified class for handling content
-    /// </summary>
-    public class ContentHandler
-    {
-        /// <summary>
-        /// Load a class from a XML document
-        /// </summary>
-        /// <typeparam name="T">The type of class to load</typeparam>
-        /// <param name="file">The file to load from</param>
-        /// <returns>The class that was contained in the file</returns>
-        public static T Load<T>(string file)
-        {
-            XmlSerializer xS = new XmlSerializer(typeof(T));
-            XmlReader r = XmlReader.Create(file);
-            T ret = (T)xS.Deserialize(r);
-            r.Close();
-            return ret;
-        }
-
-        /// <summary>
-        /// Save a class to a XML document
-        /// </summary>
-        /// <typeparam name="T">The type of class to save</typeparam>
-        /// <param name="save">The class to save</param>
-        /// <param name="file">The file to save to</param>
-        public static void Save<T>(T save, string file)
-        {
-            XmlSerializer xS = new XmlSerializer(typeof(T));
-            XmlWriter w;
-            w = XmlWriter.Create(file);
-
-            xS.Serialize(w, save);
-            w.Flush();
-            w.Close();
-        }
-
-        /// <summary>
-        /// Save a class to a XML document
-        /// </summary>
-        /// <typeparam name="T">The type of class to save</typeparam>
-        /// <param name="save">The class to save</param>
-        /// <param name="file">The file to save to</param>
-        /// <param name="sets">The XmlWriterSettings to use when saving</param>
-        public static void Save<T>(T save, string file, XmlWriterSettings sets)
-        {
-            XmlSerializer xS = new XmlSerializer(typeof(T));
-            XmlWriter w;
-            w = XmlWriter.Create(file, sets);
-
-            xS.Serialize(w, save);
-            w.Flush();
-            w.Close();
+        	return commandList.Find(item => item.Attributes.Name == commandName) != default(IRCCommandLink);
         }
     }
 }

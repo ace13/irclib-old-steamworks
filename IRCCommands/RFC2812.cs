@@ -9,135 +9,207 @@ using BaseIRCLib;
 /// </summary>
 public class RFC2812
 {
+	[IRCCommandPlaceholder("PASS", 1)]
+	public void PASS(IMessage message)
+	{
+		Console.WriteLine("Client password");
+	}
+	
     [IRCCommand("USER", 4)]
     public void USER(IMessage IMessage)
     {
-        if (IMessage.Owner.UserName == string.Empty)
+    	if (IMessage.Owner.ClientType == ClientType.TYP_NONE)
         {
-            IMessage.Owner.UserName = IMessage.Params[0];
-            IMessage.Owner.RealName = IMessage.Params[3];
+    		IMessage.Owner.UserName = IMessage.Params[0];
+    		IMessage.Owner.RealName = IMessage.Params[3];
 
             IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, null, "PING", new string[] { "31337" }));
+    		IMessage.Owner.ClientType = ClientType.TYP_CLIENT;
         }
         else
             IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.UserString, Reply.ERR_ALREADYREGISTRED, new string[] { "Unauthorized command (already registered)" }));
     }
 
-    [IRCCommand("NICK", 1, 2)]
+    [IRCCommand("NICK", 1)]
     public void NICK(IMessage IMessage)
     {
-        if (Database.GetDatabase().HasClient(IMessage.Params[0]) && Database.GetDatabase().GetClient(IMessage.Params[0]) != IMessage.Owner)
+    	if (Database.GetDatabase().HasClient(IMessage.Params[0]) && Database.GetDatabase().GetClient(IMessage.Params[0]) != IMessage.Owner)
         {
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Params[0], Reply.ERR_NICKNAMEINUSE, new string[] { IMessage.Owner.NickName, IMessage.Params[0], "Nickname already in use" }));
-            return;
-        }
+    		IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Params[0], Reply.ERR_NICKNAMEINUSE, new string[] { IMessage.Owner.NickName, IMessage.Params[0], "Nickname already in use" }));
+    		return;
+    	}
 
         if (IMessage.Owner.Greeted)
         {
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.UserString, "NICK", new string[] { IMessage.Params[0] }));
+    		IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.UserString, "NICK", new string[] { IMessage.Params[0] }));
 
             List<IClient> toInform = new List<IClient>();
 
             foreach (IChannel c in Database.GetDatabase().Channels)
             {
-                if (c.Clients.Contains(IMessage.Owner))
+    			if (c.Clients.Contains(IMessage.Owner))
                 {
-                    foreach (IClient cl in c.Clients)
+    				foreach (IClient cl in c.Clients)
                     {
-                        if (!toInform.Contains(cl) && cl != IMessage.Owner)
-                            toInform.Add(cl);
-                    }
-                }
-            }
+    					if (!toInform.Contains(cl) && cl != IMessage.Owner)
+    						toInform.Add(cl);
+    				}
+    			}
+    		}
 
             foreach (IClient cl in toInform)
             {
-                cl.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.UserString, "NICK", new string[] { IMessage.Params[0] }));
-            }
-        }
+    			cl.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.UserString, "NICK", new string[] { IMessage.Params[0] }));
+    		}
+    	}
 
         IMessage.Owner.NickName = IMessage.Params[0];
     }
-
-    [IRCCommand("MODE", 0, 5)]
-    public void MODE(IMessage IMessage)
+	
+	[IRCCommand("MODE")]
+	public void NoMode(IMessage message)
+	{
+		if (message.Params.Length > 0)
+			message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOSUCHNICK, new string[] { message.Owner.NickName, message.Params[0], "No such nick/channel" }));
+		else
+			message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_UNKNOWNCOMMAND, new string[] { message.Owner.NickName, message.Command, "Wrong parameters" }));
+	}
+	
+    [IRCCommand("MODE")]
+    public bool ChangeChannelmodes(IMessage IMessage)
     {
-        if (IMessage.Params.Count() >= 2 && Database.GetDatabase().HasChannel(IMessage.Params[0]))
+    	if (IMessage.Params.Count() >= 2 && Database.GetDatabase().HasChannel(IMessage.Params[0]))
         {
-            IChannel ch = Database.GetDatabase().GetChannel(IMessage.Params[0]);
+    		IChannel ch = Database.GetDatabase().GetChannel(IMessage.Params[0]);
 
             if (!ch.Clients.Contains(IMessage.Owner))
             {
-                IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.ERR_NOTONCHANNEL, new string[] { IMessage.Owner.NickName, IMessage.Params[0], "You're not on that channel" }));
-                return;
-            }
+    			IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.ERR_NOTONCHANNEL, new string[] { IMessage.Owner.NickName, IMessage.Params[0], "You're not on that channel" }));
+    			return true;
+    		}
+   
+			if (IMessage.Params[1][0] == '+')
+			{
+    			if (IMessage.Params[1] == "+b")
+				{
+    				if (IMessage.Params.Length == 2)
+					{
+    					foreach (string s in ch.Banlist)
+						{
+    						IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_BANLIST, new string[] { IMessage.Owner.NickName, IMessage.Params[0], s }));
+    					}
+    	
+						IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_ENDOFBANLIST, new string[] { IMessage.Owner.NickName, IMessage.Params[0], "End of channel ban list" }));
+    				}
+    			}
+	            else if ((IMessage.Params[1] == "+o" && (IMessage.Owner.Modes.Contains('o')) || ch.ClientModes[IMessage.Owner].Contains('o')))
+	            {
+    				if (Database.GetDatabase().HasClient(IMessage.Params[2]))
+    					if (ch.Clients.Contains(Database.GetDatabase().GetClient(IMessage.Params[2])))
+						{
+    						IClient target = Database.GetDatabase().GetClient(IMessage.Params[2]);
+    					
+							if (!ch.ClientModes[target].Contains('o'))
+							{
+    							ch.ClientModes[target] += "o";
+    							ch.SendMessage(IMessage, true);
+    						}
+    					}
+    			}
+	            else if (IMessage.Params[1].Contains('l') && IMessage.Params.Length == 3 && (IMessage.Owner.Modes.Contains('o') || ch.ClientModes[IMessage.Owner].Contains('o')))
+	            {
+    				//ClientHelpers.ModifyChannelModes(IMessage.Owner, ch, (IMessage.Params[1].Contains('+') ? "+" : "-") + "l", IMessage.Params[2]);
+    			}
+	            else if (IMessage.Params[1].Contains('v') && ch.Clients.Contains(Database.GetDatabase().GetClient(IMessage.Params[2])) && (IMessage.Owner.Modes.Contains('o') || ch.ClientModes[IMessage.Owner].Contains('o')))
+	            {
+    				//ClientHelpers.ModifyChannelModes(IMessage.Owner, ch, (IMessage.Params[1].Contains('+') ? "+" : "-") + "v", IMessage.Params[2]);
+    			}
+    		}
+			else if (IMessage.Params[1][0] == '-')
+			{
+    
+			}
+			else
+			{
+				
+			}
+			
+			return true;
+    	}
 
-
-
-            if ((IMessage.Params[1].Contains('o') && (IMessage.Owner.Modes.Contains('o')) || ch.ClientModes[IMessage.Owner].Contains('o')))
-            {
-                for (int i = 2; i < IMessage.Params.Length; i++)
-                {
-                    //ClientHelpers.ModifyChannelModes(IMessage.Owner, ch, (IMessage.Params[1].Contains('+') ? "+" : "-") + "o", IMessage.Params[i]);
-                }
-            }
-            if (IMessage.Params[1].Contains('l') && IMessage.Params.Length == 3 && (IMessage.Owner.Modes.Contains('o') || ch.ClientModes[IMessage.Owner].Contains('o')))
-            {
-                //ClientHelpers.ModifyChannelModes(IMessage.Owner, ch, (IMessage.Params[1].Contains('+') ? "+" : "-") + "l", IMessage.Params[2]);
-            }
-            if (IMessage.Params[1].Contains('v') && ch.Clients.Contains(Database.GetDatabase().GetClient(IMessage.Params[2])) && (IMessage.Owner.Modes.Contains('o') || ch.ClientModes[IMessage.Owner].Contains('o')))
-            {
-                //ClientHelpers.ModifyChannelModes(IMessage.Owner, ch, (IMessage.Params[1].Contains('+') ? "+" : "-") + "v", IMessage.Params[2]);
-            }
-        }
-        else if (IMessage.Params.Length >= 1 && (IMessage.Params[0] == IMessage.Owner.NickName || !Database.GetDatabase().HasChannel(IMessage.Params[0]))) //MODE Ace(SWE)Dwaggie +o
-        {
-            if (IMessage.Params.Length == 2)
-            {
-                bool add = (IMessage.Params[1][0] == '+');
-
-                for (int i = 1; i < IMessage.Params[1].Length; i++)
-                {
-                    char mode = IMessage.Params[1][i];
-
-                    if ((add && "oO".Contains(mode)) || (!add && "r".Contains(mode)))
-                        continue;
-
-                    if (add)
-                        IMessage.Owner.Modes += mode;
-                    else
-                        IMessage.Owner.Modes.Replace(mode.ToString(), "");
-                }
-            }
-
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_UMODEIS, new string[] { IMessage.Owner.NickName, "+" + IMessage.Owner.Modes }));
-        }
-        else if (IMessage.Params.Length == 1 && Database.GetDatabase().HasChannel(IMessage.Params[0]))
-        {
-            IChannel ch = Database.GetDatabase().GetChannel(IMessage.Params[0]);
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_CHANNELMODEIS, new string[] { IMessage.Owner.NickName, ch.ChannelName, "+" + ch.GetModes() }));
-        }
-        else if (IMessage.Params.Count() == 0)
-        {
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_UMODEIS, new string[] { IMessage.Owner.NickName, "+" + IMessage.Owner.Modes }));
-        }
-        else
-        {
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, IMessage.Owner.NickName, Reply.ERR_NOSUCHNICK, new string[] { IMessage.Params[0], "No such nick/channel" }));
-        }
+		return false;
     }
+	
+	[IRCCommand("MODE", 1)]
+	public bool ListChannelmodes(IMessage message)
+	{
+		if (Database.GetDatabase().HasChannel(message.Params[0]))
+		{
+			IChannel ch = Database.GetDatabase().GetChannel(message.Params[0]);
+			
+			if (!ch.Clients.Contains(message.Owner))
+            {
+				message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOTONCHANNEL, new string[] { message.Owner.NickName, message.Params[0], "You're not on that channel" }));
+				return true;
+			}
+			
+			message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_CHANNELMODEIS, new string[] { message.Owner.NickName, message.Params[0], "+" + ch.GetModes() }));
+			return true;
+		}
+		
+		return false;
+	}
+	
+	[IRCCommand("MODE", 2)]
+	public bool ChangeUsermodes(IMessage message)
+	{
+		if (message.Params[0] == message.Owner.NickName)
+		{
+			bool add = (message.Params[1][0] == '+');
+
+            for (int i = 1; i < message.Params[1].Length; i++)
+            {
+                char mode = message.Params[1][i];
+
+                if ((add && "oO".Contains(mode)) || (!add && "r".Contains(mode)))
+                    continue;
+
+                if (add)
+                    message.Owner.Modes += mode;
+                else
+                    message.Owner.Modes.Replace(mode.ToString(), "");
+            }
+			
+			message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_UMODEIS, new string[] { message.Owner.NickName, "+" + message.Owner.Modes }));
+			return true;
+		}
+		
+		return false;
+	}
+	
+	[IRCCommand("MODE", 1)]
+	public bool ListUsermodes(IMessage message)
+	{
+		if (message.Params[0] == message.Owner.NickName)
+		{
+			message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_UMODEIS, new string[] { message.Owner.NickName, "+" + message.Owner.Modes }));
+			return true;
+		}
+		
+		return false;
+	}
 
     [IRCCommandPlaceholder("MOTD")]
     public void MOTD(IMessage IMessage)
     {
         IClient client = IMessage.Owner;
         client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_WELCOME, new string[] { client.NickName, "Welcome to this IRC Gateway " + client.UserString }));
-        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_YOURHOST, new string[] { client.NickName, "Your host is " + BaseIRCLib.Server.GetServer().Name + ", running version " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() }));
+        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_YOURHOST, new string[] { client.NickName, "Your host is " + BaseIRCLib.Server.GetServer().HostString + ", running version " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() }));
         client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_CREATED, new string[] { client.NickName, "This server was created " + BaseIRCLib.Server.GetServer().QueryServer("StartTime") }));
-        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_MYINFO, new string[] { client.NickName, BaseIRCLib.Server.GetServer().Name + " " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() + " iswo opsitnmlbvk" }));
+        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_MYINFO, new string[] { client.NickName, BaseIRCLib.Server.GetServer().HostString + " " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() + " iswo opsitnmlbvk" }));
 
-        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_MOTDSTART, new string[] { client.NickName, "- " + BaseIRCLib.Server.GetServer().Name + " Message of the day - " }));
-        foreach (string m in System.IO.File.ReadAllLines("motd"))
+        client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_MOTDSTART, new string[] { client.NickName, "- " + BaseIRCLib.Server.GetServer().HostString + " Message of the day - " }));
+        foreach (string m in System.IO.File.ReadAllLines("MOTD"))
         {
             client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_MOTD, new string[] { client.NickName, " " + m }));
         }
@@ -165,10 +237,10 @@ public class RFC2812
                 else if (!ch.Modes.ContainsKey('k'))
                     ch.AddClient(IMessage.Owner);
                 else
-                    IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.ERR_BADCHANNELKEY, new string[] { IMessage.Owner.NickName, s, "Cannot join channel (+k)" }));
+                    IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.ERR_BADCHANNELKEY, new string[] { IMessage.Owner.NickName, s, "Cannot join channel (+k)" }));
             }
             else
-                IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.ERR_NOSUCHCHANNEL, new string[] { IMessage.Owner.NickName, s, "No such channel" }));
+                IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.ERR_NOSUCHCHANNEL, new string[] { IMessage.Owner.NickName, s, "No such channel" }));
         }
     }
 
@@ -221,7 +293,7 @@ public class RFC2812
                 channels += (ch.ClientModes[c].Contains('o') ? "@" : "") + "&" + ch.ChannelName + " ";
 
             msg.Owner.SendMessage(msg.CreateMessage(msg.Owner, null, Reply.RPL_WHOISCHANNELS, new string[] { msg.Owner.NickName, c.NickName, channels }));
-            msg.Owner.SendMessage(msg.CreateMessage(msg.Owner, null, Reply.RPL_WHOISSERVER, new string[] { msg.Owner.NickName, c.NickName, Server.GetServer().Name, Server.GetServer().FullName }));
+            msg.Owner.SendMessage(msg.CreateMessage(msg.Owner, null, Reply.RPL_WHOISSERVER, new string[] { msg.Owner.NickName, c.NickName, Server.GetServer().HostString, Server.GetServer().FullName }));
 
             if (c.Modes.Contains("o"))
                 msg.Owner.SendMessage(msg.CreateMessage(msg.Owner, null, Reply.RPL_WHOISOPERATOR, new string[] { msg.Owner.NickName, c.NickName, "is an IRC operator" }));
@@ -244,7 +316,7 @@ public class RFC2812
             foreach (IClient cl in ch.Clients)
             {
                 if (IMessage.Params.Length == 1 || (IMessage.Params.Length == 2 && IMessage.Params[1] == "o" && cl.Modes.Contains("o")))
-                    IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, "", Reply.RPL_WHOREPLY, new string[] { IMessage.Owner.NickName, ch.ChannelName, cl.UserName, cl.HostName, Server.GetServer().Name, cl.NickName, (string.IsNullOrEmpty(cl.AwayMsg) ? "H" : "G"), "0 " + cl.RealName }));
+                    IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, "", Reply.RPL_WHOREPLY, new string[] { IMessage.Owner.NickName, IMessage.Params[0], cl.UserName, cl.HostName, Server.GetServer().HostString, cl.NickName, (string.IsNullOrEmpty(cl.AwayMsg) ? "H" : "G"), "0 " + cl.RealName }));
             }
 
             IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, "", Reply.RPL_ENDOFWHO, new string[] { IMessage.Owner.NickName, "End of WHO list" }));
@@ -257,22 +329,23 @@ public class RFC2812
             {
                 if (c.IsMatch(cl.UserString))
                     if (IMessage.Params.Length == 1 || (IMessage.Params.Length == 2 && IMessage.Params[1] == "o" && cl.Modes.Contains("o")))
-                        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, "", Reply.RPL_WHOREPLY, new string[] { IMessage.Owner.NickName, IMessage.Params[0], cl.UserName, cl.HostName, Server.GetServer().Name, cl.NickName, (string.IsNullOrEmpty(cl.AwayMsg) ? "H" : "G"), "0 " + cl.RealName }));
+                        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_WHOREPLY, new string[] { IMessage.Owner.NickName, IMessage.Params[0], cl.UserName, cl.HostName, Server.GetServer().HostString, cl.NickName, (string.IsNullOrEmpty(cl.AwayMsg) ? "H" : "G"), "0 " + cl.RealName }));
             }
 
-            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, "", Reply.RPL_ENDOFWHO, new string[] { IMessage.Owner.NickName, "End of WHO list" }));
+            IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_ENDOFWHO, new string[] { IMessage.Owner.NickName, "End of WHO list" }));
         }
     }
 
     [IRCCommandPlaceholder("OPER", 2)]
     public void OPER(IMessage IMessage)
     {
-        /*if (IMessage.Params[0] == "Iamnotauser" && IMessage.Params[1] == "Iamnotapass")
+    	if (IMessage.Params[0] == "Iamnotauser" && IMessage.Params[1] == "Iamnotapass")
         {
-            IClient client = IMessage.Owner;
-            client.Modes += "o";
-            client.SendMessage(IMessage.CreateMessage(client, client.NickName, Reply.RPL_UMODEIS, new string[] { "+" + client.Modes }, true));
-        }*/
+    		IClient client = IMessage.Owner;
+    		client.Modes += "o";
+    		client.SendMessage(IMessage.CreateMessage(client, Server.GetServer().HostString, Reply.RPL_UMODEIS, new string[] { client.NickName, "+" + client.Modes }));
+    		return;
+		}
 
         IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, null, Reply.ERR_NOOPERHOST, new string[] { IMessage.Owner.NickName, "No O-lines for your host" }));
     }
@@ -313,12 +386,6 @@ public class RFC2812
         }
     }
 
-    [IRCCommandPlaceholder("PASS", 1)]
-    public void PASS(IMessage IMessage)
-    {
-        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, null, Reply.ERR_ALREADYREGISTRED, new string[] { IMessage.Owner.NickName, "Unauthorized command (already registered)" }));
-    }
-
     [IRCCommand("PING", 1)]
     public void PING(IMessage IMessage)
     {
@@ -351,14 +418,14 @@ public class RFC2812
     [IRCCommandPlaceholder("INFO", 0, 1)]
     public void INFO(IMessage IMessage)
     {
-        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "This is a server yo!" }));
-        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "You use it for chatting" }));
+        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "This is a server yo!" }));
+        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "You use it for chatting" }));
         /*System.Resources.ResourceManager man = new System.Resources.ResourceManager("Build", System.Reflection.Assembly.GetCallingAssembly());
         string time = man.GetString("BUILD_TIME");
         time = time.Substring(0, time.Length - 6);
         IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Database.GetDatabase().Name, Reply.RPL_INFO, new string[] { "Build date: " + time + ". Build #" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.Build }, true));*/
-        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "On-line since " + Server.GetServer().QueryServer("StartTime") }));
-        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().Name, Reply.RPL_ENDOFINFO, new string[] { IMessage.Owner.NickName, "End of /INFO list" }));
+        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_INFO, new string[] { IMessage.Owner.NickName, "On-line since " + Server.GetServer().QueryServer("StartTime") }));
+        IMessage.Owner.SendMessage(IMessage.CreateMessage(IMessage.Owner, Server.GetServer().HostString, Reply.RPL_ENDOFINFO, new string[] { IMessage.Owner.NickName, "End of /INFO list" }));
     }
 
     [IRCCommand("USERHOST", 1)]
@@ -380,13 +447,19 @@ public class RFC2812
     [IRCCommandPlaceholder("SERVICE", 6)]
     public void SERVICE(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_ALREADYREGISTRED, new string[] { message.Owner.NickName, "Unauthorized command (already registered)" }));
+    	if (message.Owner.ClientType == ClientType.TYP_NONE)
+		{
+    		message.Owner.ClientType = ClientType.TYP_SERVICE;
+    		message.Owner.Dispose("Tried to provide a naughty, naughty, little service o3o");
+    	}
+		else
+        	message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_ALREADYREGISTRED, new string[] { message.Owner.NickName, "Unauthorized command (already registered)" }));
     }
 
     [IRCCommandPlaceholder("SQUIT", 2)]
     public void SQUIT(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_NOPRIVILEGES, new string[] { message.Owner.NickName, "Permission Denied- You're not an IRC operator" }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOPRIVILEGES, new string[] { message.Owner.NickName, "Permission Denied- You're not an IRC operator" }));
     }
 
     [IRCCommand("TOPIC", 1, 2)]
@@ -394,7 +467,7 @@ public class RFC2812
     {
         if (!Database.GetDatabase().HasChannel(message.Params[0]))
         {
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_NOSUCHCHANNEL, new string[] { message.Owner.NickName, message.Params[0], "No such channel" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOSUCHCHANNEL, new string[] { message.Owner.NickName, message.Params[0], "No such channel" }));
             return;
         }
 
@@ -406,20 +479,20 @@ public class RFC2812
                 ch.Topic = message.Params[1];
             else if (message.Params.Length > 1 && !ch.ClientModes[message.Owner].Contains('o'))
             {
-                message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_CHANOPRIVSNEEDED, new string[] { message.Owner.NickName, message.Params[0], "You're not channel operator" }));
+                message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_CHANOPRIVSNEEDED, new string[] { message.Owner.NickName, message.Params[0], "You're not channel operator" }));
                 return;
             }
 
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_TOPIC, new string[] { message.Owner.NickName, message.Params[0], ch.Topic }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_TOPIC, new string[] { message.Owner.NickName, message.Params[0], ch.Topic }));
         }
         else if (!ch.Clients.Contains(message.Owner))
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_NOTONCHANNEL, new string[] { message.Owner.NickName, message.Params[0], "You're not on that channel" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOTONCHANNEL, new string[] { message.Owner.NickName, message.Params[0], "You're not on that channel" }));
     }
 
     [IRCCommandPlaceholder("NAMES", 0, 2)] //[ <channel> *( "," <channel> ) [ <target> ] ]
     public void NAMES(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_TOOMANYMATCHES, new string[] { message.Owner.NickName, message.Command, (message.Params.Length > 0 ? message.Params[0] : "*"), "Too many matches" }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_TOOMANYMATCHES, new string[] { message.Owner.NickName, message.Command, (message.Params.Length > 0 ? message.Params[0] : "*"), "Too many matches" }));
     }
 
     [IRCCommandPlaceholder("LIST", 0, 2)] //[ <channel> *( "," <channel> ) [ <target> ] ]
@@ -432,7 +505,7 @@ public class RFC2812
         if (channels == null)
         {
             foreach (IChannel ch in Database.GetDatabase().Channels)
-                message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_LIST, new string[] { message.Owner.NickName, ch.ChannelName, ch.Clients.Length.ToString(), ch.Topic }));
+                message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_LIST, new string[] { message.Owner.NickName, ch.ChannelName, ch.Clients.Length.ToString(), ch.Topic }));
         }
         else
         {
@@ -441,12 +514,12 @@ public class RFC2812
                 if (Database.GetDatabase().HasChannel(s))
                 {
                     IChannel ch = Database.GetDatabase().GetChannel(s);
-                    message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_LIST, new string[] { message.Owner.NickName, ch.ChannelName, ch.Clients.Length.ToString(), ch.Topic }));
+                    message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_LIST, new string[] { message.Owner.NickName, ch.ChannelName, ch.Clients.Length.ToString(), ch.Topic }));
                 }
             }
         }
 
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_LISTEND, new string[] { message.Owner.NickName, "End of LIST" }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_LISTEND, new string[] { message.Owner.NickName, "End of LIST" }));
     }
 
     [IRCCommand("INVITE", 2)]
@@ -454,7 +527,7 @@ public class RFC2812
     {
         if (!Database.GetDatabase().HasClient(message.Params[0]) || !Database.GetDatabase().HasChannel(message.Params[1]))
         {
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_NOSUCHNICK, new string[] { message.Owner.NickName, (Database.GetDatabase().HasChannel(message.Params[1]) ? message.Params[0] : message.Params[1]), "No such nick/channel" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOSUCHNICK, new string[] { message.Owner.NickName, (Database.GetDatabase().HasChannel(message.Params[1]) ? message.Params[0] : message.Params[1]), "No such nick/channel" }));
             return;
         }
 
@@ -463,24 +536,25 @@ public class RFC2812
 
         if (ch.Clients.Contains(cl))
         {
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_USERONCHANNEL, new string[] { message.Owner.NickName, cl.NickName, ch.ChannelName, "Is already on channel" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_USERONCHANNEL, new string[] { message.Owner.NickName, cl.NickName, message.Params[1], "Is already on channel" }));
             return;
         }
 
         if (!ch.Clients.Contains(message.Owner))
         {
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_NOTONCHANNEL, new string[] { message.Owner.NickName, ch.ChannelName, "You're not on that channel" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_NOTONCHANNEL, new string[] { message.Owner.NickName, message.Params[1], "You're not on that channel" }));
             return;
         }
 
         if (ch.Modes.ContainsKey('i') && !ch.ClientModes[message.Owner].Contains('o'))
         {
-            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.ERR_CHANOPRIVSNEEDED, new string[] { message.Owner.NickName, ch.ChannelName, "You're not channel operator" }));
+            message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.ERR_CHANOPRIVSNEEDED, new string[] { message.Owner.NickName, message.Params[1], "You're not channel operator" }));
             return;
         }
 
         cl.SendMessage(message);
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_INVITING, new string[] { message.Owner.NickName, ch.ChannelName, cl.NickName }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_INVITING, new string[] { message.Owner.NickName, message.Params[1], cl.NickName }));
+		ch.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_INVITED, new string[] { "*", message.Params[1], cl.NickName, message.Owner.NickName, cl.NickName + " has been invited by " + message.Owner.NickName }));
     }
 
     [IRCCommandPlaceholder("KICK", 2, 3)] //TODO: Return values
@@ -498,7 +572,7 @@ public class RFC2812
                 foreach (string u in users)
                 {
                     if (Database.GetDatabase().HasClient(u))
-                        ch.KickClient(Database.GetDatabase().GetClient(u), (message.Params.Length == 3 ? message.Params[2] : string.Empty));
+                        ch.KickClient(Database.GetDatabase().GetClient(u), message.Owner, (message.Params.Length == 3 ? message.Params[2] : string.Empty));
                 }
             }
         }
@@ -509,7 +583,7 @@ public class RFC2812
                 {
                     IChannel ch = Database.GetDatabase().GetChannel(channels[i]);
                     IClient cl = Database.GetDatabase().GetClient(users[i]);
-                    ch.KickClient(cl, (message.Params.Length == 3 ? message.Params[2] : string.Empty));
+                    ch.KickClient(cl, message.Owner, (message.Params.Length == 3 ? message.Params[2] : string.Empty));
                 }
             }
     }
@@ -523,19 +597,19 @@ public class RFC2812
     [IRCCommandPlaceholder("VERSION", 0, 1)] //TODO: [<target>] value
     public void VERSION(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_VERSION, new string[] { message.Owner.NickName, "0." + System.Reflection.Assembly.GetCallingAssembly().GetName().Version.Build, Server.GetServer().Name, "Not a final product" }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_VERSION, new string[] { message.Owner.NickName, "0." + System.Reflection.Assembly.GetCallingAssembly().GetName().Version.Build, Server.GetServer().HostString, "Not a final product" }));
     }
 
     [IRCCommandPlaceholder("STATS", 0, 2)] //TODO: Everything
     public void STATS(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_ENDOFSTATS, new string[] { message.Owner.NickName, "End of STATS report" }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_ENDOFSTATS, new string[] { message.Owner.NickName, "End of STATS report" }));
     }
 
     [IRCCommandPlaceholder("TIME", 0, 1)] //TODO: [<target>] value
     public void TIME(IMessage message)
     {
-        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().Name, Reply.RPL_TIME, new string[] { message.Owner.NickName, Server.GetServer().Name, DateTime.Now.ToLongDateString() + " - " + DateTime.Now.ToLongTimeString() }));
+        message.Owner.SendMessage(message.CreateMessage(message.Owner, Server.GetServer().HostString, Reply.RPL_TIME, new string[] { message.Owner.NickName, Server.GetServer().HostString, DateTime.Now.ToLongDateString() + " - " + DateTime.Now.ToLongTimeString() }));
     }
 
     [IRCCommandPlaceholder("BAN", 2)] //FIXME
