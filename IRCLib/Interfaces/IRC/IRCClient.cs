@@ -13,6 +13,7 @@ namespace IRCLib.Interfaces.IRC
     {
         TcpClient tcpClient;
         Queue<IMessage> messageQueue;
+		ClientType type;
         string nick; string user; string host; string real; string modes; bool greeted; int missedPings; DateTime lastPing;
         string unfinished; bool disposed; string away; DateTime lastPong; DateTime lastCmd; string discMesg;
         Thread t;
@@ -30,12 +31,13 @@ namespace IRCLib.Interfaces.IRC
             try
             {
                 host = Dns.GetHostEntry(((IPEndPoint)tcpClient.Client.RemoteEndPoint).Address).HostName;
-                SendMessage(IRCMessage.GetStatic().CreateMessage(this, BaseIRCLib.Server.GetServer().Name, "NOTICE", new string[] { "Your hostname is " + host }));
+                SendMessage(IRCMessage.GetStatic().CreateMessage(this, BaseIRCLib.Server.GetServer().HostString, "NOTICE", new string[] { "Your hostname is " + host }));
             }
             catch (SocketException ex)
             {
+				Console.WriteLine("SocketException when finding hostname: {0}", ex.Message);
                 host = ((IPEndPoint)tcpClient.Client.RemoteEndPoint).Address.ToString();
-                SendMessage(IRCMessage.GetStatic().CreateMessage(this, BaseIRCLib.Server.GetServer().Name, "NOTICE", new string[] { "Couldn't find your hostname" }));
+                SendMessage(IRCMessage.GetStatic().CreateMessage(this, BaseIRCLib.Server.GetServer().HostString, "NOTICE", new string[] { "Couldn't find your hostname" }));
             }
 
             t = new Thread(new ThreadStart(UpdateMessages));
@@ -147,6 +149,8 @@ namespace IRCLib.Interfaces.IRC
                         }
 #endif
                     }
+					
+					continue;
                 }
 
                 Thread.Sleep(50);
@@ -178,6 +182,10 @@ namespace IRCLib.Interfaces.IRC
         public DateTime LastPong { get { return lastPong; } set { lastPong = value; } }
         public DateTime LastCommand { get { return lastCmd; } set { lastCmd = value; } }
         public int MissedPings { get { return missedPings; } set { missedPings = value; } }
-        public bool Greeted { get { return greeted; } set { greeted = value; } }
+        public bool Greeted {
+        	get { return greeted; }
+        	set { greeted = value; }
+        }
+		public ClientType ClientType { get { return type;} set { type = value; } }
     }
 }

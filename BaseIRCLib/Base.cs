@@ -66,6 +66,11 @@ namespace BaseIRCLib
         /// The number of pings the client has missed responding to.
         /// </summary>
         int MissedPings { get; set; }
+		
+		/// <summary>
+		/// The type of client (client, service or server) 
+		/// </summary>
+		ClientType ClientType { get; set; }
 
         /// <summary>
         /// Add a message to the clients message queue.
@@ -249,13 +254,15 @@ namespace BaseIRCLib
         /// Kicks a client from the channel
         /// </summary>
         /// <param name="cl">The client to kick</param>
-        void KickClient(IClient cl);
+        /// <param name="kicker">The client that kicked</para>
+        void KickClient(IClient cl, IClient kicker);
         /// <summary>
         /// Kicks a client from the channel
         /// </summary>
         /// <param name="cl">The client to kick</param>
         /// <param name="kickMsg">The message specified</param>
-        void KickClient(IClient cl, string kickMsg);
+        /// /// <param name="kicker">The client that kicked</para>
+        void KickClient(IClient cl, IClient kicker, string kickMsg);
         /// <summary>
         /// Adds the specified string to the list of ban masks
         /// </summary>
@@ -342,10 +349,6 @@ namespace BaseIRCLib
     public interface IServer
     {
         /// <summary>
-        /// The server name (same rules as IRC nicks apply)
-        /// </summary>
-        string Name { get; }
-        /// <summary>
         /// The servers hostname
         /// </summary>
         string HostString { get; }
@@ -402,6 +405,14 @@ namespace BaseIRCLib
             return parent;
         }
     }
+	
+	public enum ClientType
+	{
+		TYP_NONE,
+		TYP_CLIENT,
+		TYP_SERVICE,
+		TYP_SERVER
+	}
 
     /// <summary>
     /// A list of standard IRC replies
@@ -467,6 +478,7 @@ namespace BaseIRCLib
         RPL_TOPIC = 332,            //"<channel> :<topic>"
         RPL_INVITING = 341,         //"<channel> <nick>"
         RPL_SUMMONING = 342,        //"<user> :Summoning user to IRC"
+		RPL_INVITED = 345,			//"<channel> <user being invited> <user issuing invite> :<user being invited> has been invited by <user issuing invite>"
         RPL_INVITELIST = 346,       //"<channel> <invitemask>"
         RPL_ENDOFINVITELIST = 347,  //"<channel> :End of channel invite list"
         RPL_EXCEPTLIST = 348,       //"<channel> <exceptionmask>"
@@ -567,8 +579,12 @@ namespace BaseIRCLib
         /// <param name="maxArgs">The maximum amount of arguments allowed (If the upper limit is the same as the lower limit this value can be skipped)</param>
         public IRCCommand(string name, int minArgs = -1, int maxArgs = -1)
         {
-            this.name = name; this.minArgs = minArgs; this.maxArgs = maxArgs;
+            this.name = name; this.minArgs = minArgs; this.maxArgs = (maxArgs == -1 ? minArgs : maxArgs);
         }
+		/*public IRCCommand(string name, string arguments) //IRCCommand("MODE", "{client,?string}"), IRCCommand("MODE", "{channel,?{string,string}}")
+		{
+			
+		}*/
 
         /// <summary>
         /// The name of the command

@@ -32,7 +32,6 @@ namespace IRCLib
 
         public static IRCCommandList IRCCommands;
 
-        public TimeSpan RunTime { get { return DateTime.Now - start; } }
         public DateTime StartTime { get { return start; } }
 
         Random pingRandom = new Random();
@@ -209,25 +208,31 @@ namespace IRCLib
                         {
                             IMessage m = c.GetMessage();
 
-                                if (m.IsCommand && IRCCommands.HasCommand(m.Command))
+                            if (m.IsCommand && IRCCommands.HasCommand(m.Command))
+                            {
+        						if (IRCCommands.ValidCommand(m.Command, m.Params.Length))
                                 {
-                                    if (IRCCommands.ValidCommand(m.Command, m.Params.Length))
-                                    {
-                                        IRCCommands.CallCommand(m);
-                                        c.LastCommand = DateTime.Now;
-                                    }
-                                    else
-                                        c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, c.NickName, Reply.ERR_UNKNOWNCOMMAND, new string[] { c.NickName, m.Command, "Wrong parameters" }));
-                                }
+        							IRCCommands.CallCommand(m);
+        							c.LastCommand = DateTime.Now;
+        						}
                                 else
-                                    c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, c.NickName, Reply.ERR_UNKNOWNCOMMAND, new string[] { c.NickName, m.Command, "Unknown command" }));
+								{
+        							Console.WriteLine("Invalid command call: \"{0}\"", m.MessageString);
+        							c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, c.NickName, Reply.ERR_UNKNOWNCOMMAND, new string[] { c.NickName, m.Command, "Wrong parameters" }));
+        						}
+        					}
+                            else
+							{
+								Console.WriteLine("Unknown command: \"{0}\"", m.MessageString);
+        						c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, c.NickName, Reply.ERR_UNKNOWNCOMMAND, new string[] { c.NickName, m.Command, "Unknown command" }));
+							}
                         }
 
-                        if (!c.Greeted && !string.IsNullOrEmpty(c.NickName) && !string.IsNullOrEmpty(c.UserName) && c.LastPong != default(DateTime))
+                        if (!c.Greeted && c.NickName != "*" && c.ClientType == ClientType.TYP_CLIENT)
                             ClientHelpers.MeetAndGreet(c);
-                        else if (!c.Greeted && (DateTime.Now - c.LastCommand).TotalSeconds > 25)
+                        else if (!c.Greeted && (DateTime.Now - c.LastCommand).TotalSeconds > 15)
                             c.Dispose("Never finished handshake");
-                        else if (c.Greeted && (DateTime.Now - c.LastPing).TotalSeconds > 25)
+                        else if (c.Greeted && (DateTime.Now - c.LastPing).TotalSeconds > 30)
                         {
                             c.LastPing = DateTime.Now;
                             c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, null, "PING", new string[] { pingRandom.Next().ToString() }));
@@ -450,7 +455,7 @@ namespace IRCLib
                             continue;
                         }
 
-                        Console.WriteLine("\tCommand {0} registered{1}", command.Name, (attr.GetType() == typeof(IRCCommandPlaceholder) ? " (Placeholder implementation)" : ""));
+                        Console.WriteLine("\tCommand {0} {1} registered{2}", command.Name, (command.MinimumArguments != -1 ? "(" + command.MinimumArguments + (command.MaximumArguments != command.MinimumArguments ? "-" + command.MaximumArguments : "") + " argument" + (command.MinimumArguments == 1 && command.MaximumArguments == 1 ? "" : "s") + ")" : "(no arguments)"), (attr.GetType() == typeof(IRCCommandPlaceholder) ? " (Placeholder implementation)" : ""));
                         returnValue.AddCommand(command, commandClass, methodInfo);
                     }
                 }
@@ -469,8 +474,6 @@ namespace IRCLib
         {
             return string.Empty;
         }
-
-        public string HostString { get { return Name; } }
         
         #endregion
 

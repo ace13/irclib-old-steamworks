@@ -59,11 +59,9 @@ namespace IRCLib
                 ClientModes.Add(c, "");
 
             SendMessage(c, IRCMessage.GetStatic().CreateMessage(c, (ClientModes[c].Contains('o') ? "@" : "") + c.UserString, "JOIN", new string[] { "&" + ChannelName }), true);
-            if (c.GetType() == typeof(SteamClient))
-                return;
 
             if (!string.IsNullOrEmpty(Topic))
-                c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().Name, Reply.RPL_TOPIC, new string[] { c.NickName, "&" + ChannelName, "" + Topic }));
+                c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().HostString, Reply.RPL_TOPIC, new string[] { c.NickName, "&" + ChannelName, "" + Topic }));
 
             int currentNick = 0;
 
@@ -79,16 +77,16 @@ namespace IRCLib
                 {
                     names = names.Substring(0, names.Length - 1);
 
-                    c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().Name, Reply.RPL_NAMREPLY, new string[] { c.NickName, "=", "&" + ChannelName, names }));
+                    c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().HostString, Reply.RPL_NAMREPLY, new string[] { c.NickName, "=", "&" + ChannelName, names }));
 
                     names = "";
                 }
             }
 
             if (!string.IsNullOrEmpty(names))
-                c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().Name, Reply.RPL_NAMREPLY, new string[] { c.NickName, "=", "&" + ChannelName, names }));
+                c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().HostString, Reply.RPL_NAMREPLY, new string[] { c.NickName, "=", "&" + ChannelName, names }));
 
-            c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().Name, Reply.RPL_ENDOFNAMES, new string[] { c.NickName, "&" + ChannelName, "End of NAMES list" }));
+            c.SendMessage(IRCMessage.GetStatic().CreateMessage(c, BaseIRCLib.Server.GetServer().HostString, Reply.RPL_ENDOFNAMES, new string[] { c.NickName, "&" + ChannelName, "End of NAMES list" }));
         }
 
         public virtual void RemoveClient(IClient c)
@@ -107,17 +105,17 @@ namespace IRCLib
             ClientModes.Remove(c);
         }
 
-        public virtual void KickClient(IClient c)
+        public virtual void KickClient(IClient c, IClient kicker)
         {
-            KickClient(c, string.Empty);
+            KickClient(c, kicker, string.Empty);
         }
 
-        public virtual void KickClient(IClient c, string message)
+        public virtual void KickClient(IClient c, IClient kicker, string message)
         {
-            if (!clients.Contains(c))
+            if (!clients.Contains(c) || !(clients.Contains(kicker) && ClientModes[kicker].Contains('o')))
                 return;
-
-            SendMessage(c, IRCMessage.GetStatic().CreateMessage(c, c.UserString, "KICK", new string[] { "&" + ChannelName, message }), true);
+			
+            SendMessage(c, IRCMessage.GetStatic().CreateMessage(kicker, kicker.UserString, "KICK", new string[] { "&" + ChannelName, c.NickName, message }), true);
 
             clients.Remove(c);
             ClientModes.Remove(c);
