@@ -101,6 +101,9 @@ namespace IRCLib
 
             SendMessage(c, IRCMessage.GetStatic().CreateMessage(c, c.UserString, "PART", new string[] { "&" + ChannelName, message }), true);
 
+            if (!clients.Contains(c))
+                return;
+
             clients.Remove(c);
             ClientModes.Remove(c);
         }
@@ -148,7 +151,7 @@ namespace IRCLib
 
             foreach (IClient c in clientDupe)
             {
-                if ((c != C || toSender) && (!c.GetType().Equals(C.GetType()) || (c.GetType().Equals(C.GetType()) && c == C && toSender)))
+                if (c.GetType() == typeof(IRCClient) && (c != C || toSender))
                     c.SendMessage(msg);
             }
         }
@@ -244,10 +247,16 @@ namespace IRCLib
             if (m.IsCommand)
                 if (m.Command == "PRIVMSG")
                 {
+                    byte[] msg = Encoding.UTF8.GetBytes(m.Params[1]);
+                    EChatEntryType send = EChatEntryType.k_EChatEntryTypeChatMsg;
+
                     if (m.Params[1][0] == '' && m.Params[1][1] == 'A')
-                        Server.clientFriends.SendChatMsg(chatID, EChatEntryType.k_EChatEntryTypeEmote, Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9)), m.Params[1].Substring(8, m.Params[1].Length - 8).Length);
-                    else
-                        Server.clientFriends.SendChatMsg(chatID, EChatEntryType.k_EChatEntryTypeChatMsg, Encoding.UTF8.GetBytes(m.Params[1]), m.Params[1].Length + 1);
+                    {
+                        msg = Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9));
+                        send = EChatEntryType.k_EChatEntryTypeEmote;
+                    }
+
+                    Server.clientFriends.SendChatMsg(chatID, send, msg, msg.Length + 1);
                 }
                 else
                     base.SendMessage(C, m, toSender);
@@ -424,13 +433,19 @@ namespace IRCLib
             if (m.IsCommand)
                 if (m.Command == "PRIVMSG")
                 {
+                    byte[] msg = Encoding.UTF8.GetBytes(m.Params[1]);
+                    EChatEntryType send = EChatEntryType.k_EChatEntryTypeChatMsg;
+
                     if (m.Params[1][0] == '' && m.Params[1][1] == 'A')
-                        Server.clientFriends.SendChatMsg(chatID, EChatEntryType.k_EChatEntryTypeEmote, Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9)), m.Params[1].Substring(8, m.Params[1].Length - 8).Length);
-                    else
-                        Server.clientFriends.SendChatMsg(chatID, EChatEntryType.k_EChatEntryTypeChatMsg, Encoding.UTF8.GetBytes(m.Params[1]), m.Params[1].Length + 1);
+                    {
+                        msg = Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9));
+                        send = EChatEntryType.k_EChatEntryTypeEmote;
+                    }
+
+                    Server.clientFriends.SendChatMsg(chatID, send, msg, msg.Length + 1);
                 }
-                else
-                    base.SendMessage(C, m, toSender);
+
+            base.SendMessage(C, m, toSender);
         }
     }
 }

@@ -59,6 +59,8 @@ namespace IRCLib.Interfaces.Steam
         public bool IsDisposed { get { return disposed; } }
         [XmlIgnore]
         public int MissedPings { get { return 0; } set { } }
+        [XmlIgnore]
+        public ClientType ClientType { get { return ClientType.TYP_CLIENT; } set { } }
 
         public SteamClient(CSteamID steamID)
         {
@@ -94,10 +96,16 @@ namespace IRCLib.Interfaces.Steam
             {
                 if (m.Command == "PRIVMSG" || m.Command == "NOTICE")
                 {
+                    byte[] msg = Encoding.UTF8.GetBytes(m.Params[1]);
+                    EChatEntryType send = EChatEntryType.k_EChatEntryTypeChatMsg;
+
                     if (m.Params[1][0] == '' && m.Params[1][1] == 'A')
-                        Server.clientFriends.SendMsgToFriend(steamID, EChatEntryType.k_EChatEntryTypeEmote, Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9)), m.Params[1].Substring(8, m.Params[1].Length - 8).Length + 1);
-                    else
-                        Server.clientFriends.SendMsgToFriend(steamID, EChatEntryType.k_EChatEntryTypeChatMsg, Encoding.UTF8.GetBytes(m.Params[1]), m.Params[1].Length + 1);
+                    {
+                        msg = Encoding.UTF8.GetBytes(m.Params[1].Substring(8, m.Params[1].Length - 9));
+                        send = EChatEntryType.k_EChatEntryTypeEmote;
+                    }
+
+                    Server.clientFriends.SendMsgToFriend(steamID, send, msg, msg.Length + 1);
                 }
             }
             else if (m.IsReply)

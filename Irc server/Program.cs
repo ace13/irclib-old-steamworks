@@ -26,7 +26,6 @@ namespace Irc_server
             {
 #endif
                 s = new IRCLib.Server();
-                s.Name = System.Net.Dns.GetHostEntry(System.Net.IPAddress.Loopback).HostName;
                 s.FullName = "Steam Gateway";
 
                 if (verbose)

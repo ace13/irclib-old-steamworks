@@ -32,7 +32,10 @@ namespace IRCLib
 
         public static IRCCommandList IRCCommands;
 
+        string hostName;
+
         public DateTime StartTime { get { return start; } }
+        public string HostString { get { return hostName; } }
 
         Random pingRandom = new Random();
 
@@ -101,6 +104,8 @@ namespace IRCLib
 
         public void Start()
         {
+            hostName = System.Net.Dns.GetHostEntry(System.Net.IPAddress.Loopback).HostName;
+
             start = DateTime.Now;
             if (t == null)
                 t = new Thread(new ThreadStart(Work));
@@ -108,6 +113,7 @@ namespace IRCLib
             clients = new List<IClient>();
             channels = new List<IChannel>();
             channels.Add(new FriendsChannel());
+            channels.Add(new Channel("Nope", "Normal IRC channel, nothing to see here. Move on."));
             running = true;
             start = DateTime.Now;
             server.Start();
@@ -308,7 +314,7 @@ namespace IRCLib
                     cl = new SteamClient(message.m_ulSender);
 
                 clients.Add(cl);
-                GetChannel("Friends").AddClient(cl);
+                GetChannel("&Friends").AddClient(cl);
             }
 
             byte[] msg = new byte[4096];
